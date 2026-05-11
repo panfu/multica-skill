@@ -18,7 +18,7 @@ Operate Multica (agent task orchestration platform) via `multica` CLI. Config: `
 ## Gotchas
 
 - `issue list` hits cloud API — no `--status all` flag needed (it may return empty)
-- `issue get <id>` accepts **issue key** (e.g. `ART-47`) or **full UUID**; short IDs from table output work fine
+- `issue get <id>` accepts **issue key** (e.g. `ART-47`) or **full UUID**; list 命令默认输出短 key，加 `--full-id` 输出完整 UUID
 - `issue search <query>` also hits cloud API
 - **multica.ai 云实例 vs 自部署实例是两套独立系统**：不同的 token、不同的 workspace_id。CLI 默认连 `server_url`（自部署），查云实例需直接 curl `api.multica.ai`。
 - **multica.ai 的 API 端点是 `api.multica.ai`，不是 `multica.ai`**（后者是前端 CDN，返回 404 页面）。URL 路径 `/artextile/issues/UUID` 中的 `artextile` 是 `workspace_slug`，不是 workspace_id。
@@ -113,7 +113,7 @@ multica version                        # 查看当前版本
 multica workspace list
 multica workspace get [workspace-id]
 multica workspace members [workspace-id]
-multica workspace update <id> [--name] [--description] [--context] [--issue-prefix]
+multica workspace update <id> [--name] [--description] [--context] [--issue-prefix]  # 长字段支持 --description-stdin / --context-stdin
 ```
 
 ## Agent
@@ -134,13 +134,13 @@ multica agent avatar <id> --file <path>
 ## Issue
 
 ```bash
-multica issue list [--status todo|in_progress|done|cancelled] [--assignee "name"] [--project <id>] [--output json]
+multica issue list [--status todo|in_progress|done|cancelled] [--assignee "name"] [--project <id>] [--output json] [--full-id]
 multica issue search <query> [--include-closed] [--limit N]
 multica issue get <id> --output json   # 支持 issue key（ART-47）或 full UUID
 multica issue create --title <title> --description <desc> --assignee "name" --priority none|low|medium|high|urgent --status todo [--project <id>] [--due-date RFC3339] [--attachment path1,path2]
 multica issue update <id> [--title] [--assignee] [--status] [--priority] [--description] [--due-date] [--project] [--parent]
-multica issue status <id> <status>
-multica issue assign <id> --to "name"
+multica issue status <id> --set <status>
+multica issue assign <id> --agent <agent-slug>   # 立即触发 task
 multica issue assign <id> --unassign
 multica issue rerun <id>               # 重新执行 issue
 ```
@@ -414,6 +414,7 @@ multica login [--token]
 | `--workspace-id <uuid>` | Override default workspace |
 | `--server-url <url>` | Override server URL |
 | `--profile <name>` | Isolated config profile |
+| `--full-id` | List commands: print full UUID instead of short key |
 | `--output json\|table` | Output format (most commands) |
 
 ---
