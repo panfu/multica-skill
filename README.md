@@ -23,15 +23,6 @@ This skill provides Hermes with comprehensive knowledge of the `multica` CLI, in
 
 Tested against **multica CLI v0.2.29** (May 2026).
 
-## Self-hosted instance reference
-
-This skill was developed against a self-hosted Multica instance:
-
-- **URL:** https://desk.artextilestore.com.cn
-- **Workspace:** 85539409
-
-> The gotchas section documents self-host specific behaviors (e.g., label commands returning 404 when backend features are disabled).
-
 ## Structure
 
 ```
