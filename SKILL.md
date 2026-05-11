@@ -18,14 +18,14 @@ Operate Multica (agent task orchestration platform) via `multica` CLI. Config: `
 ## Gotchas
 
 - `issue list` hits cloud API — no `--status all` flag needed (it may return empty)
-- `issue get <id>` requires **full UUID**; short IDs from table output will 404
+- `issue get <id>` accepts **issue key** (e.g. `ART-47`) or **full UUID**; short IDs from table output work fine
 - `issue search <query>` also hits cloud API
 - **multica.ai 云实例 vs 自部署实例是两套独立系统**：不同的 token、不同的 workspace_id。CLI 默认连 `server_url`（自部署），查云实例需直接 curl `api.multica.ai`。
 - **multica.ai 的 API 端点是 `api.multica.ai`，不是 `multica.ai`**（后者是前端 CDN，返回 404 页面）。URL 路径 `/artextile/issues/UUID` 中的 `artextile` 是 `workspace_slug`，不是 workspace_id。
 - **跨实例查 issue 的 curl 写法**：
   ```bash
   # 云实例（multica.ai）需要用 workspace_slug，不能用 desk 的 workspace_id
-  curl -s -H "Authorization: Bearer mul_CLOUD_TOKEN" \
+  curl -s -H "Authorization: Bearer $TOKEN" \
     "https://api.multica.ai/api/issues/<uuid>?workspace_slug=artextile"
   # 自部署实例（desk）用 multica CLI 或 curl desk URL
   ```
@@ -72,19 +72,63 @@ Operate Multica (agent task orchestration platform) via `multica` CLI. Config: `
   ```bash
   ssh host 'echo "password" | sudo -S sh -c "command"'
   ```
+- **Label commands may return 404 on self-hosted** — `label`, `issue label`, `issue subscriber` commands exist in CLI v0.2.29+ but require backend support. If you get `404 page not found`, the instance doesn't have these features enabled.
+- **Agent avatar requires `--file` flag** — `multica agent avatar <id> --file <path>` uploads an image. No other flags supported.
+- **Daemon `disk-usage` is new in v0.2.29** — shows per-workspace storage. Use `--by-workspace` for breakdown, `--top N` for largest items.
+
+## Setup
+
+```bash
+multica setup cloud                    # 配置 cloud 实例
+multica setup self-host                # 配置自部署实例
+```
+
+## Login
+
+```bash
+multica login [--token]                # 交互式登录
+multica login --token -                # 从 stdin 读取 token（非交互式）
+multica auth status
+multica auth logout
+```
+
+## Config
+
+```bash
+multica config show
+multica config set <key> <value>       # keys: server_url, app_url, workspace_id
+```
+
+## Update
+
+```bash
+multica update                         # 升级 CLI 到最新版
+multica update --download-timeout 300  # 自定义下载超时（秒）
+multica version                        # 查看当前版本
+```
+
+## Workspace
+
+```bash
+multica workspace list
+multica workspace get [workspace-id]
+multica workspace members [workspace-id]
+multica workspace update <id> [--name] [--description] [--context] [--issue-prefix]
+```
 
 ## Agent
 
 ```bash
 multica agent list --output json
 multica agent get <id>
-multica agent create --name <name> --runtime-id <id> --description <desc> --instructions <prompt> [--visibility private|workspace]
-multica agent update <id> [--name] [--instructions] [--status idle|working] [--runtime-id] [--max-concurrent-tasks N]
+multica agent create --name <name> --runtime-id <id> --description <desc> --instructions <prompt> [--visibility private|workspace] [--model <model>] [--custom-args <args>] [--custom-env <env>]
+multica agent update <id> [--name] [--instructions] [--status idle|working] [--runtime-id] [--max-concurrent-tasks N] [--model] [--custom-args] [--custom-env]
 multica agent archive <id>
 multica agent restore <id>
 multica agent skills list <agent-id>
 multica agent skills set <agent-id> --skill-ids id1,id2,id3
-multica agent tasks <id>
+multica agent tasks <id>               # 需要 full UUID，不支持 slug
+multica agent avatar <id> --file <path>
 ```
 
 ## Issue
@@ -92,21 +136,42 @@ multica agent tasks <id>
 ```bash
 multica issue list [--status todo|in_progress|done|cancelled] [--assignee "name"] [--project <id>] [--output json]
 multica issue search <query> [--include-closed] [--limit N]
-multica issue get <full-uuid> --output json
-multica issue create --title <title> --description <desc> --assignee "name" --priority none|low|medium|high|urgent --status todo [--project <id>] [--due-date RFC3339]
+multica issue get <id> --output json   # 支持 issue key（ART-47）或 full UUID
+multica issue create --title <title> --description <desc> --assignee "name" --priority none|low|medium|high|urgent --status todo [--project <id>] [--due-date RFC3339] [--attachment path1,path2]
 multica issue update <id> [--title] [--assignee] [--status] [--priority] [--description] [--due-date] [--project] [--parent]
 multica issue status <id> <status>
 multica issue assign <id> --to "name"
 multica issue assign <id> --unassign
+multica issue rerun <id>               # 重新执行 issue
 ```
 
 ## Issue Comment
 
 ```bash
-multica issue comment add <full-uuid> --content <text> [--parent <comment-id>] [--attachment path1,path2] [--content-stdin]
-multica issue comment list <full-uuid> [--limit N] [--since RFC3339]
+multica issue comment add <id> --content <text> [--parent <comment-id>] [--attachment path1,path2] [--content-stdin]
+multica issue comment list <id> [--limit N] [--since RFC3339]
 multica issue comment delete <comment-id>
 ```
+
+## Issue Label
+
+```bash
+multica issue label list <issue-id>
+multica issue label add <issue-id> --label <label-name>
+multica issue label remove <issue-id> --label <label-name>
+```
+
+> ⚠️ 需要后端支持。self-host 实例可能返回 404。
+
+## Issue Subscriber
+
+```bash
+multica issue subscriber list <issue-id>
+multica issue subscriber add <issue-id> --user <user-id>
+multica issue subscriber remove <issue-id> --user <user-id>
+```
+
+> ⚠️ 需要后端支持。self-host 实例可能返回 404。
 
 ## Issue Execution
 
@@ -115,15 +180,35 @@ multica issue runs <issue-id> --output json
 multica issue run-messages <task-id> --output json [--since N]
 ```
 
+## Label
+
+```bash
+multica label list
+multica label get <id>
+multica label create --name <name> [--description] [--color <hex>]
+multica label update <id> [--name] [--description] [--color]
+multica label delete <id>
+```
+
+> ⚠️ 需要后端支持。self-host 实例可能返回 404。
+
 ## Project
 
 ```bash
 multica project list
 multica project get <id>
-multica project create --title <title> [--description] [--icon emoji] [--lead "name"]
+multica project create --title <title> [--description] [--icon emoji] [--lead "name"] [--repo <github-url>]
 multica project update <id> [--title] [--description] [--icon] [--lead] [--status]
 multica project status <id> <status>
 multica project delete <id>
+```
+
+## Project Resource
+
+```bash
+multica project resource list <project-id>
+multica project resource add <project-id> --type <type> --url <url>
+multica project resource remove <project-id> <resource-id>
 ```
 
 ## Skill
@@ -138,16 +223,6 @@ multica skill files upsert <skill-id> --path <path> --content <body>
 multica skill files delete <skill-id> <file-id>
 multica skill import --url <clawhub|skills.sh url>
 multica skill delete <id> --yes
-```
-
-## Runtime
-
-```bash
-multica runtime list
-multica runtime ping <runtime-id> [--wait]
-multica runtime usage <runtime-id> [--days N]
-multica runtime activity <runtime-id>
-multica runtime update <runtime-id> --target-version <ver> [--wait]
 ```
 
 ## Autopilot
@@ -169,12 +244,14 @@ multica autopilot trigger-delete <trigger-id>
 
 **Note:** `--mode` currently only supports `create_issue`. `--timezone` defaults to UTC — always set explicitly for non-UTC schedules.
 
-## Workspace
+## Runtime
 
 ```bash
-multica workspace list
-multica workspace get [workspace-id]
-multica workspace members [workspace-id]
+multica runtime list
+multica runtime ping <runtime-id> [--wait]
+multica runtime usage <runtime-id> [--days N]
+multica runtime activity <runtime-id>
+multica runtime update <runtime-id> --target-version <ver> [--wait]
 ```
 
 ## Daemon
@@ -184,6 +261,8 @@ multica daemon start [--foreground] [--max-concurrent-tasks N] [--poll-interval 
 multica daemon status
 multica daemon logs [-f] [-n N]
 multica daemon stop
+multica daemon restart
+multica daemon disk-usage [--by-workspace] [--top N]
 ```
 
 Daemon requires at least one agent CLI (claude/codex/opencode/openclaw/hermes/gemini) on PATH. Without any, daemon refuses to start with `Error: no agent CLI found`.
@@ -306,6 +385,18 @@ multica daemon start
 
 Some networks block `get.multica.ai`. Install from GitHub releases instead: download `multica-cli-<version>-<os>-<arch>.tar.gz`, extract, place binary in `~/bin/`, ensure `~/bin` is in PATH.
 
+## Attachment
+
+```bash
+multica attachment download <id> [-o dir]
+```
+
+## Repo
+
+```bash
+multica repo checkout <url> [--ref <branch>]  # 克隆项目仓库到本地 workspace
+```
+
 ## Config & Auth
 
 ```bash
@@ -314,14 +405,6 @@ multica config set <key> <value>        # keys: server_url, app_url, workspace_i
 multica auth status
 multica auth logout
 multica login [--token]
-```
-
-Non-interactive login (e.g. over SSH): pipe token via stdin to `multica login --token -`
-
-## Attachment
-
-```bash
-multica attachment download <id> [-o dir]
 ```
 
 ## Global Flags
@@ -334,4 +417,3 @@ multica attachment download <id> [-o dir]
 | `--output json\|table` | Output format (most commands) |
 
 ---
-
